@@ -73,13 +73,14 @@ function create_vpc_network() {
 function create_firewall_rules() {
   local network_name="${SERVER_NAME}-vpc"
   local tailscale_cidr="100.64.0.0/10"
+  local iap_cidr="35.235.240.0/20"  # GCP IAP (Identity-Aware Proxy) for gcloud compute ssh
 
   info "ファイアウォールルールを作成しています..."
 
-  # SSH ルール
+  # SSH ルール (Tailscale + IAP)
   _create_fw_rule "${SERVER_NAME}-allow-ssh" \
     "tcp:22" \
-    "${tailscale_cidr}" \
+    "${tailscale_cidr},${iap_cidr}" \
     "${network_name}"
 
   # Minecraft ルール
@@ -173,6 +174,7 @@ function wait_for_ssh() {
     attempt=$((attempt + 1))
     if gcloud compute ssh "${SERVER_NAME}" \
         --zone="${zone}" \
+        --tunnel-through-iap \
         --command="echo ok" \
         --ssh-flag="-o ConnectTimeout=5" \
         --ssh-flag="-o StrictHostKeyChecking=no" \
@@ -194,6 +196,7 @@ function remote_exec() {
   local zone="${REGION}-a"
   gcloud compute ssh "${SERVER_NAME}" \
     --zone="${zone}" \
+    --tunnel-through-iap \
     --ssh-flag="-o StrictHostKeyChecking=no" \
     --quiet \
     --command="$1"
