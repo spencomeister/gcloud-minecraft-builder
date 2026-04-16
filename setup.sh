@@ -67,6 +67,11 @@ JVM_FLAGS=""
 VELOCITY_SECRET=""
 
 # ---------------------------------------------------------------------------
+# 設定ファイルパス
+# ---------------------------------------------------------------------------
+CONFIG_FILE="${SCRIPT_DIR}/.last-config.env"
+
+# ---------------------------------------------------------------------------
 # クリーンアップ（スクリプト終了時に機密情報を消去）
 # ---------------------------------------------------------------------------
 function cleanup() {
@@ -75,6 +80,80 @@ function cleanup() {
   unset VELOCITY_SECRET
 }
 trap cleanup EXIT
+
+# ---------------------------------------------------------------------------
+# 設定保存（機密情報を除く）
+# ---------------------------------------------------------------------------
+function save_config() {
+  cat > "${CONFIG_FILE}" <<EOF
+# Minecraft GCP Builder - 保存済み設定
+# 生成日時: $(date '+%Y-%m-%d %H:%M:%S')
+# ※ API Token / Auth Key は含まれません（セキュリティ上の理由）
+PROJECT_ID="${PROJECT_ID}"
+SERVER_NAME="${SERVER_NAME}"
+REGION="${REGION}"
+MAX_PLAYERS="${MAX_PLAYERS}"
+MACHINE_TYPE="${MACHINE_TYPE}"
+DISK_SIZE="${DISK_SIZE}"
+SERVER_TYPE="${SERVER_TYPE}"
+VELOCITY_ENABLED="${VELOCITY_ENABLED}"
+VOICECHAT_ENABLED="${VOICECHAT_ENABLED}"
+MC_VERSION="${MC_VERSION}"
+JAVA_VERSION="${JAVA_VERSION}"
+DIFFICULTY="${DIFFICULTY}"
+GAMEMODE="${GAMEMODE}"
+HARDCORE="${HARDCORE}"
+WHITELIST="${WHITELIST}"
+WHITELIST_USERS="${WHITELIST_USERS}"
+PVP="${PVP}"
+COMMAND_BLOCK="${COMMAND_BLOCK}"
+ALLOW_FLIGHT="${ALLOW_FLIGHT}"
+CF_ZONE_ID="${CF_ZONE_ID}"
+CF_DOMAIN="${CF_DOMAIN}"
+CF_SRV_HOST="${CF_SRV_HOST}"
+EOF
+  chmod 600 "${CONFIG_FILE}"
+  info "設定を ${CONFIG_FILE} に保存しました"
+}
+
+# ---------------------------------------------------------------------------
+# 保存済み設定の読み込み確認
+# ---------------------------------------------------------------------------
+function try_load_config() {
+  if [ ! -f "${CONFIG_FILE}" ]; then
+    return 1
+  fi
+
+  echo ""
+  info "前回の設定が見つかりました: ${CONFIG_FILE}"
+  echo ""
+
+  # 保存済み設定を一時読み込みして表示
+  (
+    source "${CONFIG_FILE}"
+    echo "    プロジェクト ID : ${PROJECT_ID}"
+    echo "    サーバー名      : ${SERVER_NAME}"
+    echo "    リージョン      : ${REGION}"
+    echo "    マシンタイプ    : ${MACHINE_TYPE}"
+    echo "    ディスクサイズ  : ${DISK_SIZE} GB"
+    echo "    サーバー種別    : ${SERVER_TYPE}"
+    echo "    MC バージョン   : ${MC_VERSION}"
+    echo "    ドメイン        : ${CF_DOMAIN}"
+  )
+
+  echo ""
+  read -rp "  前回の設定を再利用しますか？ [Y/n]: " load_choice
+  if [ "${load_choice}" = "n" ] || [ "${load_choice}" = "N" ]; then
+    return 1
+  fi
+
+  # 設定ファイルを読み込み
+  source "${CONFIG_FILE}"
+  REGION_GROUP_KEY="${REGION_GROUP[$REGION]}"
+  success "保存済み設定を読み込みました"
+  echo ""
+  return 0
+}
 
 # ---------------------------------------------------------------------------
 # ヘッダー表示
@@ -642,19 +721,30 @@ function show_completion_message() {
 function main() {
   show_header
 
-  # 対話フロー（12 ステップ）
-  step_01_project_id
-  step_02_server_name
-  step_03_region
-  step_04_players_and_machine
-  step_05_disk_size
-  step_06_server_type
-  step_07_mc_version
-  step_08_game_settings
-  step_09_security_settings
-  step_10_cloudflare
-  step_11_tailscale
+  # 前回の設定を再利用するか確認
+  if try_load_config; then
+    # 機密情報のみ再入力
+    step_10_cloudflare
+    step_11_tailscale
+  else
+    # 対話フロー（12 ステップ）
+    step_01_project_id
+    step_02_server_name
+    step_03_region
+    step_04_players_and_machine
+    step_05_disk_size
+    step_06_server_type
+    step_07_mc_version
+    step_08_game_settings
+    step_09_security_settings
+    step_10_cloudflare
+    step_11_tailscale
+  fi
+
   step_12_summary
+
+  # 設定を保存（機密情報除く）
+  save_config
 
   # GCP インフラ構築
   setup_gcp_infrastructure

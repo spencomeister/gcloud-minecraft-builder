@@ -144,7 +144,7 @@ function create_vm_instance() {
     --zone="${zone}" \
     --boot-disk-type="pd-standard" \
     --boot-disk-size="${DISK_SIZE}GB" \
-    --image-family="ubuntu-2404-lts" \
+    --image-family="ubuntu-2404-lts-amd64" \
     --image-project="ubuntu-os-cloud" \
     --network="${SERVER_NAME}-vpc" \
     --quiet || \
