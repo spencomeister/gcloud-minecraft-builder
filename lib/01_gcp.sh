@@ -269,14 +269,12 @@ function remote_exec() {
 }
 
 # ---------------------------------------------------------------------------
-# VM へファイルを転送するヘルパー
+# VM へファイルを転送するヘルパー（base64 経由で IAP トンネル互換）
 # ---------------------------------------------------------------------------
 function remote_copy() {
-  local zone="${REGION}-a"
-  gcloud compute scp \
-    --zone="${zone}" \
-    --tunnel-through-iap \
-    --ssh-flag="-o StrictHostKeyChecking=no" \
-    --quiet \
-    "$1" "${SERVER_NAME}:$2"
+  local src="$1"
+  local dest="$2"
+  local encoded
+  encoded=$(base64 -w0 < "${src}")
+  remote_exec "echo '${encoded}' | base64 -d > '${dest}'"
 }
