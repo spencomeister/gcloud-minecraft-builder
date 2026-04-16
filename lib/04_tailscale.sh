@@ -79,8 +79,8 @@ function _restrict_ssh_to_tailscale() {
       echo \"ListenAddress ${ts_ip}\" | sudo tee -a /etc/ssh/sshd_config > /dev/null
     fi
 
-    # sshd 再起動
-    sudo systemctl restart sshd
+    # sshd 再起動 (Ubuntu 24.04 ではサービス名が 'ssh')
+    sudo systemctl restart ssh
   " || error_exit "SSH 設定の変更に失敗しました。"
 
   success "SSH アクセス制限設定完了"
