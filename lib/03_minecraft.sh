@@ -13,10 +13,23 @@ function install_minecraft_server() {
   if [ "${SERVER_TYPE}" = "fabric" ]; then
     check_jar="fabric-server-launch.jar"
   fi
+
+  # 起動 JAR 名を決定
+  LAUNCH_JAR="server.jar"
+  if [ "${SERVER_TYPE}" = "fabric" ]; then
+    LAUNCH_JAR="fabric-server-launch.jar"
+  fi
+
   if remote_exec "test -f /opt/minecraft/${SERVER_NAME}/${check_jar}" 2>/dev/null; then
     success "Minecraft サーバーは既にインストール済みです。スキップします"
     # JVM フラグは他フェーズで必要なので計算だけは行う
     _calculate_jvm_flags
+    # Fabric: バニラ server.jar が欠落していれば再ダウンロード
+    if [ "${SERVER_TYPE}" = "fabric" ]; then
+      _ensure_fabric_vanilla_jar
+    fi
+    # systemd サービスが正しい JAR を指しているか確認・修正
+    _ensure_systemd_service
     return 0
   fi
 
@@ -28,12 +41,6 @@ function install_minecraft_server() {
 
   # JVM フラグを計算
   _calculate_jvm_flags
-
-  # 起動 JAR 名を決定
-  LAUNCH_JAR="server.jar"
-  if [ "${SERVER_TYPE}" = "fabric" ]; then
-    LAUNCH_JAR="fabric-server-launch.jar"
-  fi
 
   case "${SERVER_TYPE}" in
     vanilla)   _install_vanilla ;;
@@ -73,6 +80,68 @@ function _calculate_jvm_flags() {
 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem \
 -XX:MaxTenuringThreshold=1"
   info "JVM メモリ割り当て: ${JVM_MEM}MB"
+}
+
+# ---------------------------------------------------------------------------
+# Fabric: バニラ server.jar が欠落/破損していれば再ダウンロード
+# ---------------------------------------------------------------------------
+function _ensure_fabric_vanilla_jar() {
+  # fabric-server-launch.jar と server.jar が異なるファイルか確認
+  # 以前のバグで mv fabric-server-launch.jar server.jar してしまった場合を修復
+  local has_vanilla
+  has_vanilla=$(remote_exec "cd /opt/minecraft/${SERVER_NAME} && \
+    if [ ! -f server.jar ]; then echo missing; \
+    elif cmp -s server.jar fabric-server-launch.jar 2>/dev/null; then echo duplicate; \
+    else echo ok; fi")
+
+  if [ "${has_vanilla}" = "ok" ]; then
+    return 0
+  fi
+
+  warn "バニラ Minecraft JAR が${has_vanilla}です。再ダウンロードしています..."
+
+  local jar_url
+  jar_url=$(curl -s "${MOJANG_VERSION_MANIFEST}" | \
+    python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for v in data['versions']:
+    if v['id'] == '${MC_VERSION}':
+        import urllib.request
+        meta = json.loads(urllib.request.urlopen(v['url']).read())
+        print(meta['downloads']['server']['url'])
+        break
+" 2>/dev/null)
+
+  if [ -z "${jar_url}" ]; then
+    error_exit "Minecraft ${MC_VERSION} のバニラ JAR URL を取得できませんでした。"
+  fi
+
+  remote_exec "cd /opt/minecraft/${SERVER_NAME} && \
+    sudo -u minecraft curl -fsSL -o server.jar '${jar_url}'" || \
+    error_exit "バニラ JAR の再ダウンロードに失敗しました。"
+
+  success "バニラ server.jar を再ダウンロードしました"
+}
+
+# ---------------------------------------------------------------------------
+# systemd サービスが正しい JAR を参照しているか確認・必要なら更新
+# ---------------------------------------------------------------------------
+function _ensure_systemd_service() {
+  local service_file="/etc/systemd/system/minecraft-${SERVER_NAME}.service"
+  local expected_jar="${LAUNCH_JAR:-server.jar}"
+
+  # サービスファイルが存在しない or JAR が違う場合は再作成
+  local current_jar
+  current_jar=$(remote_exec "grep -oP '(?<=-jar )\S+' ${service_file} 2>/dev/null || echo ''")
+
+  if [ "${current_jar}" = "${expected_jar}" ]; then
+    info "systemd サービスは正しい JAR (${expected_jar}) を参照しています"
+    return 0
+  fi
+
+  warn "systemd サービスを更新しています: ${current_jar:-未作成} → ${expected_jar}"
+  _create_systemd_service
 }
 
 # ---------------------------------------------------------------------------
