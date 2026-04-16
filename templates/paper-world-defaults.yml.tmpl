@@ -1,0 +1,156 @@
+config-version: 30
+_version: 30
+
+anticheat:
+  anti-xray:
+    enabled: true
+    engine-mode: 1
+    hidden-blocks:
+    - copper_ore
+    - deepslate_copper_ore
+    - gold_ore
+    - deepslate_gold_ore
+    - iron_ore
+    - deepslate_iron_ore
+    - coal_ore
+    - deepslate_coal_ore
+    - lapis_ore
+    - deepslate_lapis_ore
+    - mossy_cobblestone
+    - obsidian
+    - chest
+    - diamond_ore
+    - deepslate_diamond_ore
+    - redstone_ore
+    - deepslate_redstone_ore
+    - clay
+    - emerald_ore
+    - deepslate_emerald_ore
+    - ender_chest
+    lava-obscures: false
+    max-block-height: 64
+    replacement-blocks:
+    - stone
+    - oak_planks
+    update-radius: 2
+    use-permission: false
+
+chunks:
+  auto-save-interval: default
+  delay-chunk-unloads-by: 10s
+  entity-per-chunk-save-limit:
+    arrow: -1
+    ender_pearl: -1
+    experience_orb: -1
+    fireball: -1
+    small_fireball: -1
+    snowball: -1
+  fixed-chunk-inhabited-time: -1
+  max-auto-save-chunks-per-tick: 24
+  prevent-moving-into-unloaded-chunks: false
+
+collisions:
+  allow-player-cramming-damage: false
+  allow-vehicle-collisions: true
+  fix-climbing-bypassing-cramming-rule: false
+  max-entity-collisions: 8
+  only-players-collide: false
+
+entities:
+  armor-stands:
+    do-collision-entity-lookups: true
+    tick: true
+  markers:
+    tick: false
+  spawning:
+    all-chunks-are-slime-chunks: false
+    count-all-mobs-for-spawning: false
+    creative-arrow-despawn-rate: default
+    despawn-ranges:
+      ambient:
+        hard: 128
+        soft: 32
+      axolotls:
+        hard: 128
+        soft: 32
+      creature:
+        hard: 128
+        soft: 32
+      misc:
+        hard: 128
+        soft: 32
+      monster:
+        hard: 128
+        soft: 32
+      underground_water_creature:
+        hard: 128
+        soft: 32
+      water_ambient:
+        hard: 64
+        soft: 32
+      water_creature:
+        hard: 128
+        soft: 32
+    non-player-arrow-despawn-rate: default
+    per-player-mob-spawns: true
+    scan-for-legacy-ender-dragon: true
+    spawn-limits:
+      ambient: -1
+      axolotls: -1
+      creature: -1
+      monster: -1
+      underground_water_creature: -1
+      water_ambient: -1
+      water_creature: -1
+    wateranimal-spawn-height:
+      maximum:
+        default: true
+        value: 0
+      minimum:
+        default: true
+        value: 0
+
+environment:
+  disable-ice-and-snow: false
+  disable-teleportation-suffocation-check: false
+  disable-thunder: false
+  frosted-ice:
+    delay:
+      max: 40
+      min: 20
+    enabled: true
+  nether-ceiling-void-damage-height: disabled
+  optimize-explosions: false
+  portal-search-radius: 128
+  portal-create-radius: 16
+  water-over-lava-flow-speed: 5
+
+loot-tables:
+  reroll-advancement-loot: false
+
+maps:
+  item-frame-cursor-limit: 128
+  item-frame-cursor-update-interval: 10
+
+scoreboards:
+  allow-non-player-entities-on-scoreboards: false
+  use-vanilla-world-scoreboard-name-coloring: false
+
+spawn:
+  allow-using-signs-inside-spawn-protection: false
+  keep-spawn-loaded: true
+  keep-spawn-loaded-range: 10
+
+tick-rates:
+  behavior:
+    villager:
+      validatenearbypoi: -1
+      acquirepoi: -1
+  mob-spawner: 1
+  sensor:
+    villager:
+      secondarypoisensor: 40
+      nearestbedsensor: 20
+      villagerbabiessensor: 40
+      playersensor: 20
+      nearestlivingentitysensor: 40
