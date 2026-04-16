@@ -83,10 +83,10 @@ function create_firewall_rules() {
     "${tailscale_cidr},${iap_cidr}" \
     "${network_name}"
 
-  # Minecraft ルール
+  # Minecraft ルール (インターネット公開)
   _create_fw_rule "${SERVER_NAME}-allow-mc" \
     "tcp:25565" \
-    "${tailscale_cidr}" \
+    "0.0.0.0/0" \
     "${network_name}"
 
   # Velocity ルール（Velocity 導入時のみ）
