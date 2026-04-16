@@ -92,6 +92,7 @@ except:
 
     if [ -z "${uuid}" ]; then
       warn "プレイヤー '${username}' の UUID 取得に失敗しました。whitelist.json を手動で編集してください。"
+      continue
     fi
 
     if [ "${first}" = "true" ]; then

@@ -383,7 +383,7 @@ function step_08_game_settings() {
   if [ "${hardcore_choice}" = "y" ] || [ "${hardcore_choice}" = "Y" ]; then
     HARDCORE="true"
     DIFFICULTY="hard"
-    success "ハードコードモード: 有効 (難易度を hard に固定しました)"
+    success "ハードコアモード: 有効 (難易度を hard に固定しました)"
   else
     HARDCORE="false"
     info "ハードコアモード: 無効"

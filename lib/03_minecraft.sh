@@ -111,7 +111,7 @@ function _install_fabric() {
       -mcversion '${MC_VERSION}' \
       -downloadMinecraft && \
     sudo -u minecraft mv fabric-server-launch.jar server.jar 2>/dev/null || true && \
-    sudo -u minecraft echo 'fabric.server.jar=server.jar' > fabric-server-launcher.properties" || \
+    sudo -u minecraft bash -c 'echo fabric.server.jar=server.jar > fabric-server-launcher.properties'" || \
     error_exit "FabricMC のインストールに失敗しました。"
 
   success "FabricMC インストール完了"

@@ -73,7 +73,7 @@ declare -A DISK_PRICE_PER_GB
 DISK_PRICE_PER_GB["us"]="0.040"
 DISK_PRICE_PER_GB["jp"]="0.052"
 
-JPY_RATE=150
+JPY_RATE=150  # 参考値: 1 USD = 150 JPY（料金試算用、実際の為替レートとは異なる場合があります）
 HOURS_PER_DAY=24
 HOURS_PER_MONTH=730
 

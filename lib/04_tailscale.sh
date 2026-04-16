@@ -68,14 +68,15 @@ function _get_tailscale_ip() {
 function _restrict_ssh_to_tailscale() {
   info "SSH アクセスを Tailscale IP に制限しています..."
 
+  local ts_ip="${TAILSCALE_IP}"
   remote_exec "
     # 既存の ListenAddress 設定をコメントアウト
     sudo sed -i 's/^ListenAddress 0\.0\.0\.0/#ListenAddress 0.0.0.0/' /etc/ssh/sshd_config
     sudo sed -i 's/^ListenAddress ::/#ListenAddress ::/' /etc/ssh/sshd_config
 
     # Tailscale IP で ListenAddress を追加
-    if ! grep -q 'ListenAddress ${TAILSCALE_IP}' /etc/ssh/sshd_config; then
-      echo 'ListenAddress ${TAILSCALE_IP}' | sudo tee -a /etc/ssh/sshd_config > /dev/null
+    if ! grep -qF \"ListenAddress ${ts_ip}\" /etc/ssh/sshd_config; then
+      echo \"ListenAddress ${ts_ip}\" | sudo tee -a /etc/ssh/sshd_config > /dev/null
     fi
 
     # sshd 再起動
