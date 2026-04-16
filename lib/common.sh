@@ -195,11 +195,14 @@ function show_price_table() {
 # ---------------------------------------------------------------------------
 function select_java_version() {
   local mc_version=$1
-  local minor
+  local major minor
+  major=$(echo "$mc_version" | cut -d. -f1)
   minor=$(echo "$mc_version" | cut -d. -f2)
-  if   [ "$minor" -le 16 ]; then echo 11
-  elif [ "$minor" -eq 17 ]; then echo 16
-  elif [ "$minor" -le 20 ]; then echo 17
-  else                           echo 21
+  # 新バージョン体系 (25.x.y 以降、例: 26.1.2) は常に Java 21 を使用
+  if   [ "$major" -gt 1 ];   then echo 21
+  elif [ "$minor" -le 16 ];  then echo 11
+  elif [ "$minor" -eq 17 ];  then echo 16
+  elif [ "$minor" -le 20 ];  then echo 17
+  else                            echo 21
   fi
 }

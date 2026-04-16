@@ -307,7 +307,7 @@ function step_07_mc_version() {
   echo ""
 
   while true; do
-    read -rp "  Minecraft バージョンを入力してください (例: 1.21.4): " MC_VERSION
+    read -rp "  Minecraft バージョンを入力してください (例: 1.21.4, 26.1.2): " MC_VERSION
     if echo "${MC_VERSION}" | grep -qE '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
       break
     else
