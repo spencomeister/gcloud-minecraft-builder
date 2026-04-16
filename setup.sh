@@ -113,6 +113,9 @@ ALLOW_FLIGHT="${ALLOW_FLIGHT}"
 CF_ZONE_ID="${CF_ZONE_ID}"
 CF_DOMAIN="${CF_DOMAIN}"
 CF_SRV_HOST="${CF_SRV_HOST}"
+CF_A_RECORD_ID="${CF_A_RECORD_ID}"
+TAILSCALE_IP="${TAILSCALE_IP}"
+VM_EXTERNAL_IP="${VM_EXTERNAL_IP}"
 EOF
   chmod 600 "${CONFIG_FILE}"
   info "設定を ${CONFIG_FILE} に保存しました"
@@ -826,9 +829,44 @@ function main() {
     fi
 
     # VM の外部 IP を取得（既存 VM から）
-    VM_EXTERNAL_IP=$(gcloud compute instances describe "${SERVER_NAME}" \
-      --zone="${REGION}-a" \
-      --format="get(networkInterfaces[0].accessConfigs[0].natIP)" 2>/dev/null || echo "")
+    if [ -z "${VM_EXTERNAL_IP:-}" ]; then
+      VM_EXTERNAL_IP=$(gcloud compute instances describe "${SERVER_NAME}" \
+        --zone="${REGION}-a" \
+        --format="get(networkInterfaces[0].accessConfigs[0].natIP)" 2>/dev/null || echo "")
+    fi
+
+    # Tailscale IP を復元（保存済み設定になければ VM から取得）
+    if [ -z "${TAILSCALE_IP:-}" ]; then
+      info "Tailscale IP を VM から取得しています..."
+      TAILSCALE_IP=$(gcloud compute ssh "${SERVER_NAME}" \
+        --zone="${REGION}-a" \
+        --tunnel-through-iap \
+        --ssh-flag="-o ConnectTimeout=10" \
+        --ssh-flag="-o StrictHostKeyChecking=no" \
+        --quiet \
+        --command="tailscale ip -4 2>/dev/null" 2>/dev/null || echo "")
+      if [ -n "${TAILSCALE_IP}" ]; then
+        info "Tailscale IP: ${TAILSCALE_IP}"
+      fi
+    fi
+
+    # CF_A_RECORD_ID を復元（保存済み設定になければ Cloudflare API から取得）
+    if [ -z "${CF_A_RECORD_ID:-}" ] && [ -n "${CF_API_TOKEN:-}" ]; then
+      info "Cloudflare A レコード ID を取得しています..."
+      CF_A_RECORD_ID=$(curl -s \
+        -H "Authorization: Bearer ${CF_API_TOKEN}" \
+        -H "Content-Type: application/json" \
+        "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records?type=A&name=${CF_DOMAIN}" | \
+        python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+records = data.get('result', [])
+print(records[0]['id']) if records else print('')
+" 2>/dev/null || echo "")
+      if [ -n "${CF_A_RECORD_ID}" ]; then
+        info "A レコード ID: ${CF_A_RECORD_ID}"
+      fi
+    fi
   else
     # 通常実行
     if try_load_config; then
@@ -869,6 +907,9 @@ function main() {
   # SSH 制限は全ての remote_exec が完了した後に実行
   # （これ以降 IAP 経由の SSH は不可になる）
   should_run_phase "tailscale" && finalize_ssh_restriction
+
+  # ビルド完了後に設定を保存（ランタイム値を含む）
+  save_config
 
   show_completion_message
 }
