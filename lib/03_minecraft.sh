@@ -8,8 +8,12 @@
 function install_minecraft_server() {
   step "Minecraft サーバー (${SERVER_TYPE}) をインストールしています..."
 
-  # 既に server.jar が存在するか確認
-  if remote_exec "test -f /opt/minecraft/${SERVER_NAME}/server.jar" 2>/dev/null; then
+  # 既に必要な JAR が存在するか確認
+  local check_jar="server.jar"
+  if [ "${SERVER_TYPE}" = "fabric" ]; then
+    check_jar="fabric-server-launch.jar"
+  fi
+  if remote_exec "test -f /opt/minecraft/${SERVER_NAME}/${check_jar}" 2>/dev/null; then
     success "Minecraft サーバーは既にインストール済みです。スキップします"
     # JVM フラグは他フェーズで必要なので計算だけは行う
     _calculate_jvm_flags
@@ -24,6 +28,12 @@ function install_minecraft_server() {
 
   # JVM フラグを計算
   _calculate_jvm_flags
+
+  # 起動 JAR 名を決定
+  LAUNCH_JAR="server.jar"
+  if [ "${SERVER_TYPE}" = "fabric" ]; then
+    LAUNCH_JAR="fabric-server-launch.jar"
+  fi
 
   case "${SERVER_TYPE}" in
     vanilla)   _install_vanilla ;;
@@ -117,9 +127,7 @@ function _install_fabric() {
     sudo -u minecraft curl -fsSL -o fabric-installer.jar '${installer_url}' && \
     sudo -u minecraft java -jar fabric-installer.jar server \
       -mcversion '${MC_VERSION}' \
-      -downloadMinecraft && \
-    sudo -u minecraft mv fabric-server-launch.jar server.jar 2>/dev/null || true && \
-    sudo -u minecraft bash -c 'echo fabric.server.jar=server.jar > fabric-server-launcher.properties'" || \
+      -downloadMinecraft" || \
     error_exit "FabricMC のインストールに失敗しました。"
 
   success "FabricMC インストール完了"
@@ -291,7 +299,7 @@ After=network.target tailscaled.service
 [Service]
 User=minecraft
 WorkingDirectory=/opt/minecraft/${SERVER_NAME}
-ExecStart=/usr/bin/java ${JVM_FLAGS} -jar server.jar nogui
+ExecStart=/usr/bin/java ${JVM_FLAGS} -jar ${LAUNCH_JAR:-server.jar} nogui
 ExecStop=/bin/kill -SIGTERM \$MAINPID
 ExecStartPost=/opt/minecraft/ddns-update.sh
 Restart=on-failure
