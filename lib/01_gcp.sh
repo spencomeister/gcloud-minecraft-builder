@@ -275,6 +275,7 @@ function remote_copy() {
   local zone="${REGION}-a"
   gcloud compute scp \
     --zone="${zone}" \
+    --tunnel-through-iap \
     --ssh-flag="-o StrictHostKeyChecking=no" \
     --quiet \
     "$1" "${SERVER_NAME}:$2"
