@@ -1,0 +1,45 @@
+config-version: 3
+_version: 28
+
+proxies:
+  velocity:
+    enabled: {{VELOCITY_ENABLED}}
+    online-mode: true
+    secret: '{{VELOCITY_SECRET}}'
+
+messages:
+  no-permission: '<red>I''m sorry, but you do not have permission to perform this command.'
+  kick:
+    authentication-servers-down: '<lang:multiplayer.disconnect.authservers_down>'
+    connection-throttle: Connection throttled! Please wait before reconnecting.
+    flying-player: <lang:multiplayer.disconnect.flying>
+    flying-vehicle: <lang:multiplayer.disconnect.flying>
+
+timings:
+  enabled: true
+  verbose: true
+  server-name-privacy: false
+  really-enable-timings: false
+  history-interval: 300
+  history-length: 3600
+  server-name: Unknown Server
+
+chunk-loading-basic:
+  autoconfig-send-distance: true
+  player-max-chunk-load-rate: -1.0
+  player-max-chunk-send-rate: 75.0
+
+chunk-loading-advanced:
+  auto-config-send-distance: true
+  player-max-concurrent-chunk-generates: 0
+  player-max-concurrent-chunk-loads: 0
+
+misc:
+  fix-entity-position-desync: true
+  lag-compensate-block-breaking: true
+  load-permissions-yml-before-plugins: true
+  max-joins-per-tick: 3
+  region-file-cache-size: 256
+  strict-advancement-dimension-check: false
+  use-alternative-luck-formula: false
+  use-dimension-type-for-custom-spawners: false

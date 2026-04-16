@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# DDNS 更新スクリプト - gcloud-minecraft-builder により自動生成
+# 配置先: /opt/minecraft/ddns-update.sh
+# 実行方式: cron (5 分ごと) / systemd ExecStartPost
+
+set -euo pipefail
+
+CF_API_TOKEN="{{CF_API_TOKEN}}"
+CF_ZONE_ID="{{CF_ZONE_ID}}"
+CF_RECORD_ID="{{CF_RECORD_ID}}"
+CF_DOMAIN="{{CF_DOMAIN}}"
+LAST_IP_FILE="/opt/minecraft/.last_ip"
+LOG_PREFIX="$(date '+%Y-%m-%d %H:%M:%S')"
+
+# 現在の外部 IP を取得
+CURRENT_IP=$(curl -s --max-time 10 https://api.ipify.org 2>/dev/null || echo "")
+
+if [ -z "${CURRENT_IP}" ]; then
+  echo "${LOG_PREFIX} [WARN] 外部 IP の取得に失敗しました。スキップします。"
+  exit 0
+fi
+
+# 前回の IP と比較
+if [ -f "${LAST_IP_FILE}" ]; then
+  LAST_IP=$(cat "${LAST_IP_FILE}")
+  if [ "${CURRENT_IP}" = "${LAST_IP}" ]; then
+    exit 0
+  fi
+fi
+
+# IP が変化した場合は Cloudflare A レコードを更新
+echo "${LOG_PREFIX} [INFO] IP が変更されました: ${LAST_IP:-不明} -> ${CURRENT_IP}"
+
+RESPONSE=$(curl -s -X PATCH \
+  -H "Authorization: Bearer ${CF_API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data "{\"type\":\"A\",\"name\":\"${CF_DOMAIN}\",\"content\":\"${CURRENT_IP}\",\"ttl\":60,\"proxied\":false}" \
+  "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records/${CF_RECORD_ID}" \
+  2>/dev/null)
+
+SUCCESS=$(echo "${RESPONSE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('success','false'))" 2>/dev/null || echo "false")
+
+if [ "${SUCCESS}" = "True" ] || [ "${SUCCESS}" = "true" ]; then
+  echo "${CURRENT_IP}" > "${LAST_IP_FILE}"
+  echo "${LOG_PREFIX} [OK] Cloudflare A レコードを更新しました: ${CF_DOMAIN} -> ${CURRENT_IP}"
+else
+  echo "${LOG_PREFIX} [ERROR] Cloudflare A レコードの更新に失敗しました。レスポンス: ${RESPONSE}"
+  exit 1
+fi

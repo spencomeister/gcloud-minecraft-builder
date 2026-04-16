@@ -1,0 +1,9 @@
+# 機密情報・一時ファイル
+*.env
+.secrets
+*.log
+*.tmp
+
+# スクリプト実行時の一時生成物
+generated/
+.last_run_config
