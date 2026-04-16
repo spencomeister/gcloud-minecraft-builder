@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # setup.sh - Minecraft GCP サーバー自動構築スクリプト エントリーポイント
-# 使用方法: bash setup.sh
+# 使用方法: bash setup.sh [--resume <phase>]
+#   --resume <phase>  指定フェーズから再開
+#     フェーズ: gcp, java, tailscale, minecraft, config, dns, ddns
 # 実行環境: Google Cloud Shell
 
 set -euo pipefail
@@ -718,56 +720,135 @@ function show_completion_message() {
 # ---------------------------------------------------------------------------
 # メイン処理
 # ---------------------------------------------------------------------------
-function main() {
-  show_header
 
-  # 前回の設定を再利用するか確認
-  if try_load_config; then
-    # 機密情報のみ再入力
-    step_10_cloudflare
-    step_11_tailscale
-  else
-    # 対話フロー（12 ステップ）
-    step_01_project_id
-    step_02_server_name
-    step_03_region
-    step_04_players_and_machine
-    step_05_disk_size
-    step_06_server_type
-    step_07_mc_version
-    step_08_game_settings
-    step_09_security_settings
-    step_10_cloudflare
-    step_11_tailscale
+# ビルドフェーズ順序定義
+BUILD_PHASES=("gcp" "java" "tailscale" "minecraft" "config" "dns" "ddns")
+
+function show_resume_help() {
+  echo ""
+  echo "  使用方法: bash setup.sh [--resume <phase>]"
+  echo ""
+  echo "  --resume <phase>  指定フェーズから構築を再開"
+  echo ""
+  echo "  フェーズ一覧:"
+  echo "    gcp        GCP インフラ構築 (VPC / FW / VM)"
+  echo "    java       Java インストール"
+  echo "    tailscale  Tailscale セットアップ"
+  echo "    minecraft  Minecraft サーバーインストール"
+  echo "    config     設定ファイル生成"
+  echo "    dns        Cloudflare DNS 設定"
+  echo "    ddns       DDNS セットアップ"
+  echo ""
+}
+
+function should_run_phase() {
+  local phase="$1"
+  local resume_from="${RESUME_PHASE:-}"
+
+  # --resume 指定なし → 全フェーズ実行
+  if [ -z "${resume_from}" ]; then
+    return 0
   fi
 
-  step_12_summary
+  # 指定フェーズ以降か判定
+  local found_resume=false
+  for p in "${BUILD_PHASES[@]}"; do
+    if [ "${p}" = "${resume_from}" ]; then
+      found_resume=true
+    fi
+    if [ "${found_resume}" = true ] && [ "${p}" = "${phase}" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
-  # 設定を保存（機密情報除く）
-  save_config
+function main() {
+  # 引数パース
+  RESUME_PHASE=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --resume)
+        shift
+        RESUME_PHASE="${1:-}"
+        if [ -z "${RESUME_PHASE}" ]; then
+          show_resume_help
+          error_exit "--resume にはフェーズ名を指定してください。"
+        fi
+        # フェーズ名バリデーション
+        local valid=false
+        for p in "${BUILD_PHASES[@]}"; do
+          [ "${p}" = "${RESUME_PHASE}" ] && valid=true
+        done
+        if [ "${valid}" = false ]; then
+          show_resume_help
+          error_exit "不明なフェーズ: ${RESUME_PHASE}"
+        fi
+        shift
+        ;;
+      --help|-h)
+        show_resume_help
+        exit 0
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
 
-  # GCP インフラ構築
-  setup_gcp_infrastructure
+  show_header
 
-  # Java インストール（VM 上）
-  install_java_on_vm
+  if [ -n "${RESUME_PHASE}" ]; then
+    # --resume 指定時: 保存済み設定を必須で読み込み
+    if [ ! -f "${CONFIG_FILE}" ]; then
+      error_exit "保存済み設定が見つかりません。先に通常実行で設定を完了させてください。"
+    fi
+    source "${CONFIG_FILE}"
+    REGION_GROUP_KEY="${REGION_GROUP[$REGION]}"
+    info "保存済み設定を読み込みました"
+    info "フェーズ '${RESUME_PHASE}' から再開します"
+    echo ""
 
-  # Tailscale セットアップ（VM 上）
-  setup_tailscale
+    # 機密情報の再入力
+    step_10_cloudflare
+    step_11_tailscale
 
-  # Minecraft サーバーインストール（VM 上）
-  install_minecraft_server
+    # VM の外部 IP を取得（既存 VM から）
+    VM_EXTERNAL_IP=$(gcloud compute instances describe "${SERVER_NAME}" \
+      --zone="${REGION}-a" \
+      --format="get(networkInterfaces[0].accessConfigs[0].natIP)" 2>/dev/null || echo "")
+  else
+    # 通常実行
+    if try_load_config; then
+      step_10_cloudflare
+      step_11_tailscale
+    else
+      step_01_project_id
+      step_02_server_name
+      step_03_region
+      step_04_players_and_machine
+      step_05_disk_size
+      step_06_server_type
+      step_07_mc_version
+      step_08_game_settings
+      step_09_security_settings
+      step_10_cloudflare
+      step_11_tailscale
+    fi
 
-  # 設定ファイル生成（VM 上）
-  generate_config_files
+    step_12_summary
+    save_config
+  fi
 
-  # Cloudflare DNS 設定
-  setup_cloudflare_dns
+  # ビルドフェーズ実行
+  should_run_phase "gcp"       && setup_gcp_infrastructure
+  should_run_phase "java"      && install_java_on_vm
+  should_run_phase "tailscale" && setup_tailscale
+  should_run_phase "minecraft" && install_minecraft_server
+  should_run_phase "config"    && generate_config_files
+  should_run_phase "dns"       && setup_cloudflare_dns
+  should_run_phase "ddns"      && setup_ddns
 
-  # DDNS セットアップ（VM 上）
-  setup_ddns
-
-  # 完了メッセージ
   show_completion_message
 }
 
