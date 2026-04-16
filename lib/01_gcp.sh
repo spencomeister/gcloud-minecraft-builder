@@ -161,6 +161,72 @@ function create_vm_instance() {
 }
 
 # ---------------------------------------------------------------------------
+# IAP SSH 接続テスト（復旧可能）
+# sshd が Tailscale IP のみにバインドされている場合、自動復旧する
+# ---------------------------------------------------------------------------
+function ensure_iap_ssh() {
+  local zone="${REGION}-a"
+
+  info "IAP 経由の SSH 接続を確認しています..."
+
+  if gcloud compute ssh "${SERVER_NAME}" \
+      --zone="${zone}" \
+      --tunnel-through-iap \
+      --command="echo ok" \
+      --ssh-flag="-o ConnectTimeout=10" \
+      --ssh-flag="-o StrictHostKeyChecking=no" \
+      --quiet 2>/dev/null; then
+    success "IAP SSH 接続確認完了"
+    return 0
+  fi
+
+  warn "IAP SSH に接続できません。sshd が Tailscale IP のみに制限されている可能性があります"
+  info "startup-script 経由で sshd を復旧しています..."
+
+  # startup-script メタデータで sshd_config をリセット
+  gcloud compute instances add-metadata "${SERVER_NAME}" \
+    --zone="${zone}" \
+    --metadata=startup-script='#!/bin/bash
+# IAP SSH 復旧用（一時スクリプト）
+sed -i "/^ListenAddress 100\./d" /etc/ssh/sshd_config
+systemctl restart ssh
+' --quiet 2>/dev/null || error_exit "メタデータの設定に失敗しました。"
+
+  # VM をソフトリセット（再起動）
+  info "VM を再起動しています..."
+  gcloud compute instances reset "${SERVER_NAME}" \
+    --zone="${zone}" \
+    --quiet 2>/dev/null || error_exit "VM の再起動に失敗しました。"
+
+  # SSH 復旧を待機
+  local max_attempts=20
+  local attempt=0
+  while [ $attempt -lt $max_attempts ]; do
+    attempt=$((attempt + 1))
+    if gcloud compute ssh "${SERVER_NAME}" \
+        --zone="${zone}" \
+        --tunnel-through-iap \
+        --command="echo ok" \
+        --ssh-flag="-o ConnectTimeout=10" \
+        --ssh-flag="-o StrictHostKeyChecking=no" \
+        --quiet 2>/dev/null; then
+      success "IAP SSH 接続が復旧しました"
+
+      # startup-script メタデータを削除
+      gcloud compute instances remove-metadata "${SERVER_NAME}" \
+        --zone="${zone}" \
+        --keys=startup-script \
+        --quiet 2>/dev/null || true
+      return 0
+    fi
+    info "SSH 復旧待機中... (${attempt}/${max_attempts}) 10秒後に再試行します"
+    sleep 10
+  done
+
+  error_exit "SSH の復旧に失敗しました。GCP コンソールのシリアルコンソールから手動で確認してください。"
+}
+
+# ---------------------------------------------------------------------------
 # SSH 接続待機
 # ---------------------------------------------------------------------------
 function wait_for_ssh() {

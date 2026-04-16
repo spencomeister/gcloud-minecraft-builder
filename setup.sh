@@ -852,6 +852,11 @@ function main() {
     save_config
   fi
 
+  # --resume 時: remote_exec が必要なフェーズがある場合、IAP SSH の疎通を事前確認
+  if [ -n "${RESUME_PHASE}" ] && [ "${RESUME_PHASE}" != "gcp" ]; then
+    ensure_iap_ssh
+  fi
+
   # ビルドフェーズ実行
   should_run_phase "gcp"       && setup_gcp_infrastructure
   should_run_phase "java"      && install_java_on_vm
