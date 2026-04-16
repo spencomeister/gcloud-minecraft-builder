@@ -8,11 +8,22 @@
 function setup_tailscale() {
   step "Tailscale を設定しています..."
 
+  # Tailscale が既に動作中なら全スキップ
+  local ts_status
+  ts_status=$(remote_exec "tailscale status --json 2>/dev/null | grep -o '\"BackendState\":\"[^\"]*\"'" 2>/dev/null || echo "")
+  if echo "${ts_status}" | grep -q '"Running"'; then
+    TAILSCALE_IP=$(remote_exec "tailscale ip -4 2>/dev/null" 2>/dev/null || echo "")
+    if [ -n "${TAILSCALE_IP}" ] && echo "${TAILSCALE_IP}" | grep -qE '^100\.'; then
+      success "Tailscale は既に動作中です。スキップします (IP: ${TAILSCALE_IP})"
+      return 0
+    fi
+  fi
+
   _install_tailscale_on_vm
   _join_tailscale_network
   _get_tailscale_ip
-  _restrict_ssh_to_tailscale
-  _verify_tailscale_ssh
+  _verify_tailscale_status
+  # 注意: SSH 制限は全ての remote_exec 完了後に finalize_ssh_restriction() で実行
 }
 
 # ---------------------------------------------------------------------------
@@ -20,6 +31,12 @@ function setup_tailscale() {
 # ---------------------------------------------------------------------------
 function _install_tailscale_on_vm() {
   info "Tailscale をインストールしています..."
+
+  # 既にインストール済みか確認
+  if remote_exec "command -v tailscale >/dev/null 2>&1" 2>/dev/null; then
+    success "Tailscale は既にインストール済みです。スキップします"
+    return 0
+  fi
 
   remote_exec "curl -fsSL https://tailscale.com/install.sh | sudo sh" || \
     error_exit "Tailscale のインストールに失敗しました。"
@@ -63,10 +80,18 @@ function _get_tailscale_ip() {
 }
 
 # ---------------------------------------------------------------------------
-# SSH を Tailscale IP のみに制限
+# SSH を Tailscale IP のみに制限（全 remote_exec 完了後に呼ぶこと）
 # ---------------------------------------------------------------------------
-function _restrict_ssh_to_tailscale() {
-  info "SSH アクセスを Tailscale IP に制限しています..."
+function finalize_ssh_restriction() {
+  step "SSH アクセスを Tailscale IP に制限しています..."
+
+  # 既に制限済みか確認
+  local listen_cfg
+  listen_cfg=$(remote_exec "grep -c '^ListenAddress 100\.' /etc/ssh/sshd_config 2>/dev/null" 2>/dev/null || echo "0")
+  if [ "${listen_cfg}" != "0" ]; then
+    success "SSH アクセス制限は既に設定済みです。スキップします"
+    return 0
+  fi
 
   local ts_ip="${TAILSCALE_IP}"
   remote_exec "
@@ -83,13 +108,13 @@ function _restrict_ssh_to_tailscale() {
     sudo systemctl restart ssh
   " || error_exit "SSH 設定の変更に失敗しました。"
 
-  success "SSH アクセス制限設定完了"
+  success "SSH アクセス制限設定完了 (Tailscale IP: ${ts_ip} のみ許可)"
 }
 
 # ---------------------------------------------------------------------------
-# Tailscale IP 経由での SSH 接続確認
+# Tailscale 動作確認
 # ---------------------------------------------------------------------------
-function _verify_tailscale_ssh() {
+function _verify_tailscale_status() {
   info "Tailscale の動作状態を確認しています..."
 
   local max_attempts=6

@@ -722,22 +722,23 @@ function show_completion_message() {
 # ---------------------------------------------------------------------------
 
 # ビルドフェーズ順序定義
-BUILD_PHASES=("gcp" "java" "tailscale" "minecraft" "config" "dns" "ddns")
+BUILD_PHASES=("gcp" "java" "tailscale" "dns" "ddns" "config" "minecraft")
 
 function show_resume_help() {
   echo ""
   echo "  使用方法: bash setup.sh [--resume <phase>]"
   echo ""
   echo "  --resume <phase>  指定フェーズから構築を再開"
+  echo "  ※ 完了済みフェーズは自動スキップされます"
   echo ""
-  echo "  フェーズ一覧:"
+  echo "  フェーズ一覧 (実行順):"
   echo "    gcp        GCP インフラ構築 (VPC / FW / VM)"
   echo "    java       Java インストール"
-  echo "    tailscale  Tailscale セットアップ"
-  echo "    minecraft  Minecraft サーバーインストール"
+  echo "    tailscale  Tailscale セットアップ            [要: Tailscale Auth Key]"
+  echo "    dns        Cloudflare DNS 設定              [要: Cloudflare API Token]"
+  echo "    ddns       DDNS セットアップ                  [要: Cloudflare API Token]"
   echo "    config     設定ファイル生成"
-  echo "    dns        Cloudflare DNS 設定"
-  echo "    ddns       DDNS セットアップ"
+  echo "    minecraft  Minecraft サーバーインストール"
   echo ""
 }
 
@@ -809,9 +810,20 @@ function main() {
     info "フェーズ '${RESUME_PHASE}' から再開します"
     echo ""
 
-    # 機密情報の再入力
-    step_10_cloudflare
-    step_11_tailscale
+    # 必要な機密情報のみ再入力
+    # tailscale フェーズが実行対象 → Tailscale Auth Key が必要
+    if should_run_phase "tailscale"; then
+      step_11_tailscale
+    else
+      info "Tailscale は完了済みです。Auth Key の入力をスキップします"
+    fi
+
+    # dns または ddns フェーズが実行対象 → Cloudflare API Token が必要
+    if should_run_phase "dns" || should_run_phase "ddns"; then
+      step_10_cloudflare
+    else
+      info "Cloudflare DNS は完了済みです。API Token の入力をスキップします"
+    fi
 
     # VM の外部 IP を取得（既存 VM から）
     VM_EXTERNAL_IP=$(gcloud compute instances describe "${SERVER_NAME}" \
@@ -844,10 +856,14 @@ function main() {
   should_run_phase "gcp"       && setup_gcp_infrastructure
   should_run_phase "java"      && install_java_on_vm
   should_run_phase "tailscale" && setup_tailscale
-  should_run_phase "minecraft" && install_minecraft_server
-  should_run_phase "config"    && generate_config_files
   should_run_phase "dns"       && setup_cloudflare_dns
   should_run_phase "ddns"      && setup_ddns
+  should_run_phase "config"    && generate_config_files
+  should_run_phase "minecraft" && install_minecraft_server
+
+  # SSH 制限は全ての remote_exec が完了した後に実行
+  # （これ以降 IAP 経由の SSH は不可になる）
+  should_run_phase "tailscale" && finalize_ssh_restriction
 
   show_completion_message
 }

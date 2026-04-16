@@ -8,6 +8,14 @@
 function install_java_on_vm() {
   step "Java (OpenJDK ${JAVA_VERSION}) をインストールしています..."
 
+  # 既にインストール済みか確認
+  local installed_ver
+  installed_ver=$(remote_exec "java -version 2>&1 | head -1" 2>/dev/null || echo "")
+  if echo "${installed_ver}" | grep -q "${JAVA_VERSION}"; then
+    success "Java は既にインストール済みです。スキップします: ${installed_ver}"
+    return 0
+  fi
+
   remote_exec "sudo apt-get update -y && \
     sudo apt-get install -y openjdk-${JAVA_VERSION}-jre-headless" || \
     error_exit "Java のインストールに失敗しました。"

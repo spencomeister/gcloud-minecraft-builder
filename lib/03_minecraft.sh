@@ -8,6 +8,14 @@
 function install_minecraft_server() {
   step "Minecraft サーバー (${SERVER_TYPE}) をインストールしています..."
 
+  # 既に server.jar が存在するか確認
+  if remote_exec "test -f /opt/minecraft/${SERVER_NAME}/server.jar" 2>/dev/null; then
+    success "Minecraft サーバーは既にインストール済みです。スキップします"
+    # JVM フラグは他フェーズで必要なので計算だけは行う
+    _calculate_jvm_flags
+    return 0
+  fi
+
   # minecraft ユーザー・ディレクトリ作成
   remote_exec "sudo useradd -r -m -d /opt/minecraft -s /bin/bash minecraft 2>/dev/null || true && \
     sudo mkdir -p /opt/minecraft/${SERVER_NAME} && \
