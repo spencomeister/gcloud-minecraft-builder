@@ -90,26 +90,25 @@ function _restrict_ssh_to_tailscale() {
 # Tailscale IP 経由での SSH 接続確認
 # ---------------------------------------------------------------------------
 function _verify_tailscale_ssh() {
-  info "Tailscale IP 経由での SSH 接続を確認しています..."
+  info "Tailscale の動作状態を確認しています..."
 
   local max_attempts=6
   local attempt=0
 
   while [ $attempt -lt $max_attempts ]; do
     attempt=$((attempt + 1))
-    if ssh -o ConnectTimeout=10 \
-           -o StrictHostKeyChecking=no \
-           -o BatchMode=yes \
-           "${USER}@${TAILSCALE_IP}" \
-           "echo ok" 2>/dev/null; then
-      success "Tailscale IP 経由の SSH 接続確認完了"
+    local status
+    status=$(remote_exec "tailscale status --json 2>/dev/null | grep -o '\"BackendState\":\"[^\"]*\"'" 2>/dev/null || echo "")
+    if echo "${status}" | grep -q '"Running"'; then
+      success "Tailscale 動作確認完了 (BackendState: Running)"
+      info "Tailscale SSH 接続先: ssh ${USER}@${TAILSCALE_IP}"
       return 0
     fi
-    info "SSH 接続確認待機中... (${attempt}/${max_attempts})"
+    info "Tailscale 状態確認待機中... (${attempt}/${max_attempts})"
     sleep 10
   done
 
-  warn "Tailscale IP 経由の SSH 接続確認に失敗しました。"
+  warn "Tailscale の動作状態を確認できませんでした。"
   warn "手動で確認してください: ssh ${USER}@${TAILSCALE_IP}"
   warn "設定を続行します..."
 }
